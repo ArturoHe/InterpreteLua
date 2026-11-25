@@ -1,11 +1,15 @@
-from typing import TextIO
-from antlr4 import *
-from antlr4.Token import CommonToken
 import sys
 from typing import TextIO
 
-class LuaLexerBase(Lexer):
+from antlr4 import InputStream, Lexer
 
+LBRACKET = ord('[')
+RBRACKET = ord(']')
+EQUALS = ord('=')
+NEWLINE = ord('\n')
+
+
+class LuaLexerBase(Lexer):
     def __init__(self, input: InputStream, output: TextIO = sys.stdout):
         super().__init__(input, output)
         self.start_line = 0
@@ -14,45 +18,45 @@ class LuaLexerBase(Lexer):
     def HandleComment(self):
         self.start_line = self.line
         self.start_col = self.column - 2
-        cs = self._input
+        stream = self._input
 
-        if cs.LA(1) == 91:  # '['
-            sep = self.skip_sep(cs)
+        # comentario largo
+        if stream.LA(1) == LBRACKET:
+            sep = self.skip_sep(stream)
             if sep >= 2:
-                self.read_long_string(cs, sep)
+                self.read_long_string(stream, sep)
                 return
 
-        while cs.LA(1) != 10 and cs.LA(1) != -1:  # '\n'
-            self._interp.consume(cs)
+        while stream.LA(1) != NEWLINE and stream.LA(1) != -1:
+            self._interp.consume(stream)
 
-    def read_long_string(self, cs:InputStream, sep:int):
+    def read_long_string(self, stream, sep):
         done = False
-        self._interp.consume(cs)
+        self._interp.consume(stream)
 
         while not done:
-            c = cs.LA(1)
+            c = stream.LA(1)
             if c == -1:
                 done = True
-            elif c == 93:  # ']'
-                if self.skip_sep(cs) == sep:
-                    self._interp.consume(cs)
+            elif c == RBRACKET:
+                if self.skip_sep(stream) == sep:
+                    self._interp.consume(stream)
                     done = True
+            elif stream.LA(1) == -1:
+                done = True
             else:
-                if cs.LA(1) == -1:
-                    done = True
-                else:
-                    self._interp.consume(cs)
+                self._interp.consume(stream)
 
-    def skip_sep(self, cs:InputStream):
+    def skip_sep(self, stream):
         count = 0
-        s = cs.LA(1)
-        self._interp.consume(cs)
+        first = stream.LA(1)
+        self._interp.consume(stream)
 
-        while cs.LA(1) == 61:  # '='
-            self._interp.consume(cs)
+        while stream.LA(1) == EQUALS:
+            self._interp.consume(stream)
             count += 1
 
-        if cs.LA(1) == s:
+        if stream.LA(1) == first:
             count += 2
         elif count == 0:
             count = 1
@@ -62,7 +66,4 @@ class LuaLexerBase(Lexer):
         return count
 
     def IsLine1Col0(self):
-        cs = self._input
-        return cs.index == 1
-
-
+        return self._input.index == 1
